@@ -84,9 +84,9 @@ export class AuthClient {
     session: Session | null,
   ): void {
     this.currentSession = session;
-    this.listeners.forEach((callback) =>
-      callback(event, session, session?.user ?? null),
-    );
+    this.listeners.forEach((callback) => {
+      callback(event, session, session?.user ?? null);
+    });
   }
 
   async getSession(): Promise<SessionResponse> {
@@ -205,7 +205,10 @@ export class AuthClient {
     return data;
   }
 
-  async confirmEmail(email: string, token: string): Promise<UserResponse | null> {
+  async confirmEmail(
+    email: string,
+    token: string,
+  ): Promise<UserResponse | null> {
     const encodedEmail = encodeURIComponent(email);
     const response = await fetch(
       `${this.baseUrl}/auth/confirm-email/${encodedEmail}/${token}`,
