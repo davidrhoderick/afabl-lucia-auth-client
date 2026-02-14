@@ -89,26 +89,6 @@ export class AuthClient {
     );
   }
 
-  async createSession(): Promise<SessionResponse> {
-    const response = await fetch(`${this.baseUrl}/auth/session`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (!response.ok) return { session: null };
-
-    const data: SessionResponse = (await response.json()) as SessionResponse;
-
-    if (data.session) {
-      this.setStoredToken(data.session.token);
-      this.notifyListeners('SIGNED_IN', data.session);
-    }
-
-    return data;
-  }
-
   async getSession(): Promise<SessionResponse> {
     const token = this.getStoredToken();
 
@@ -225,12 +205,15 @@ export class AuthClient {
     return data;
   }
 
-  async confirmEmail(token: string): Promise<UserResponse | null> {
-    const response = await fetch(`${this.baseUrl}/auth/confirm-email`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
+  async confirmEmail(email: string, token: string): Promise<UserResponse | null> {
+    const encodedEmail = encodeURIComponent(email);
+    const response = await fetch(
+      `${this.baseUrl}/auth/confirm-email/${encodedEmail}/${token}`,
+      {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
 
     if (!response.ok) return null;
 
