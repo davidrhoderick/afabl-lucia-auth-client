@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { setAccessToken } from './auth';
-import { getAuthClient, type User } from './client';
+import { getWebAuthClient } from './web-client';
+import type { User } from './types';
 
 type UserContextType = {
   user: User | null;
@@ -34,15 +35,15 @@ export const UserProvider = ({
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
-  const authClient = useMemo(() => getAuthClient({ baseUrl }), [baseUrl]);
+  const authClient = useMemo(() => getWebAuthClient({ baseUrl }), [baseUrl]);
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await authClient.signOut();
     setUser(null);
     setToken(null);
     setAccessToken(null);
     onUnauthenticated?.();
-  };
+  }, [authClient, onUnauthenticated]);
 
   useEffect(() => {
     const fetchSession = async () => {
@@ -74,8 +75,7 @@ export const UserProvider = ({
       },
     );
 
-    // eslint-disable-next-line @typescript-eslint/no-floating-promises
-    fetchSession();
+    void fetchSession();
 
     return () => {
       subscription.unsubscribe();
@@ -89,7 +89,7 @@ export const UserProvider = ({
       setUser,
       signOut,
     }),
-    [user, token, setUser, signOut],
+    [user, token, signOut],
   );
 
   return <UserContext.Provider value={value}>{children}</UserContext.Provider>;

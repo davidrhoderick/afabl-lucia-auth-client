@@ -1,85 +1,30 @@
-export interface User {
-  id: string;
-  email: string;
-  createdAt: number;
-  updatedAt: number | null;
-  deletedAt: number | null;
-  confirmationSentAt: number | null;
-  emailConfirmedAt: number | null;
-  lastSignInAt: number | null;
-  role: string | null;
-  newEmail: string | null;
-  emailChangeSentAt: number | null;
-  recoverySentAt: number | null;
-}
+import type {
+  AuthClientOptions,
+  AuthStateChangeCallback,
+  AuthStorage,
+  ConfirmationResponse,
+  EmailChangeResponse,
+  PasswordResetResponse,
+  Session,
+  SessionResponse,
+  SignUpResponse,
+  UserResponse,
+} from './types';
 
-export interface Session {
-  id: string;
-  token: string;
-  createdAt: number;
-  lastVerifiedAt: number;
-  user: User;
-}
-
-export interface SessionResponse {
-  session: Session | null;
-}
-
-export interface SignUpResponse {
-  user: User;
-  confirmationToken: string;
-}
-
-export interface UserResponse {
-  user: User;
-}
-
-export interface PasswordResetResponse {
-  success: boolean;
-  recoveryToken?: string;
-}
-
-export interface EmailChangeResponse {
-  emailChangeToken: string;
-}
-
-export interface ConfirmationResponse {
-  confirmationToken: string;
-}
-
-export type AuthStateChangeCallback = (
-  event: 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED',
-  session: Session | null,
-  user: User | null,
-) => void;
-
-export interface AuthClientOptions {
-  baseUrl?: string;
-}
-
-const TOKEN_STORAGE_KEY = 'auth_session_token';
-
-export class AuthClient {
-  private readonly baseUrl: string;
-  private readonly listeners: Set<AuthStateChangeCallback> = new Set();
-  private currentSession: Session | null = null;
+export abstract class BaseAuthClient {
+  protected readonly baseUrl: string;
+  protected readonly listeners: Set<AuthStateChangeCallback> = new Set();
+  protected currentSession: Session | null = null;
+  protected abstract storage: AuthStorage;
 
   constructor(options: AuthClientOptions = {}) {
     this.baseUrl = options.baseUrl ?? '';
   }
 
-  private getStoredToken(): string | null {
-    if (globalThis.window === undefined) return null;
-    return localStorage.getItem(TOKEN_STORAGE_KEY);
-  }
+  protected abstract getStoredToken(): string | null | Promise<string | null>;
+  protected abstract setStoredToken(token: string | null): void | Promise<void>;
 
-  private setStoredToken(token: string | null): void {
-    if (globalThis.window === undefined) return;
-    if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
-    else localStorage.removeItem(TOKEN_STORAGE_KEY);
-  }
-
-  private notifyListeners(
+  protected notifyListeners(
     event: 'SIGNED_IN' | 'SIGNED_OUT' | 'TOKEN_REFRESHED',
     session: Session | null,
   ): void {
@@ -90,7 +35,7 @@ export class AuthClient {
   }
 
   async getSession(): Promise<SessionResponse> {
-    const token = this.getStoredToken();
+    const token = await this.getStoredToken();
 
     if (!token) return { session: null };
 
@@ -103,13 +48,13 @@ export class AuthClient {
     });
 
     if (!response.ok) {
-      this.setStoredToken(null);
+      await this.setStoredToken(null);
       return { session: null };
     }
 
     const data: SessionResponse = (await response.json()) as SessionResponse;
 
-    if (!data.session) this.setStoredToken(null);
+    if (!data.session) await this.setStoredToken(null);
 
     this.currentSession = data.session;
     return data;
@@ -131,7 +76,7 @@ export class AuthClient {
   }
 
   async signOut(): Promise<void> {
-    const token = this.getStoredToken();
+    const token = await this.getStoredToken();
 
     if (token) {
       try {
@@ -147,7 +92,7 @@ export class AuthClient {
       }
     }
 
-    this.setStoredToken(null);
+    await this.setStoredToken(null);
     this.notifyListeners('SIGNED_OUT', null);
   }
 
@@ -167,7 +112,7 @@ export class AuthClient {
     return this.currentSession;
   }
 
-  getToken(): string | null {
+  async getToken(): Promise<string | null> {
     return this.getStoredToken();
   }
 
@@ -198,7 +143,7 @@ export class AuthClient {
     const data = (await response.json()) as SessionResponse;
 
     if (data.session) {
-      this.setStoredToken(data.session.token);
+      await this.setStoredToken(data.session.token);
       this.notifyListeners('SIGNED_IN', data.session);
     }
 
@@ -270,7 +215,7 @@ export class AuthClient {
   async requestEmailChange(
     newEmail: string,
   ): Promise<EmailChangeResponse | null> {
-    const token = this.getStoredToken();
+    const token = await this.getStoredToken();
     if (!token) return null;
 
     const response = await fetch(`${this.baseUrl}/auth/request-email-change`, {
@@ -298,16 +243,4 @@ export class AuthClient {
 
     return (await response.json()) as UserResponse;
   }
-}
-
-let defaultClient: AuthClient | null = null;
-
-export function createAuthClient(options: AuthClientOptions = {}): AuthClient {
-  return new AuthClient(options);
-}
-
-export function getAuthClient(options: AuthClientOptions = {}): AuthClient {
-  defaultClient ??= new AuthClient(options);
-
-  return defaultClient;
 }
